@@ -2,7 +2,7 @@ import requests
 import time
 import tqdm
 
-from . import DISCORD_ENDPOINT
+DISCORD_ENDPOINT = "https://discord.com/api/v8"
 
 
 def discord_message_query(token, guild_id, query_filters=None, offset=0, is_channel=False):
