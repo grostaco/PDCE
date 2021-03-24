@@ -40,7 +40,7 @@ def discord_message_query_str(guild_id, query_filters=None, offset=0, is_channel
     if len(qoffset_filters) > 1:
         raise RuntimeError("Expected 1 Query.Offset, got {}".format(len(qoffset_filters)))
     elif len(qoffset_filters) == 0:
-        query_filters.append(Query.Offset(offset))
+        query_filters &= Query.Offset(offset)
     else:
         query_filters[qoffset_filters[0]].offset += offset
 
@@ -51,6 +51,7 @@ def discord_message_query_str(guild_id, query_filters=None, offset=0, is_channel
     return qstr
 
 
+# TODO: implement inverted queries
 class Query:
     # Template query for inheritance, DO NOT use as a filter.
     class Template:
@@ -81,6 +82,17 @@ class Query:
                 self.queries += other.queries
 
             return Query.QueryCollection(self.queries)
+
+        def pop(self, index):
+            tmp = self.queries[index]
+            del self.queries[index]
+            return tmp
+
+        def __index__(self, index):
+            return self.queries[index]
+
+        def __iter__(self):
+            return iter(self.queries)
 
 
     class Author(Template):
