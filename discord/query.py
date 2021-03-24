@@ -4,7 +4,6 @@ import tqdm
 
 DISCORD_ENDPOINT = "https://discord.com/api/v8"
 
-
 def discord_message_query(token, guild_id, query_filters=None, offset=0, is_channel=False):
     while True:
         res = requests.get(discord_message_query_str(guild_id, query_filters=query_filters, offset=0,
@@ -35,6 +34,8 @@ def discord_message_query(token, guild_id, query_filters=None, offset=0, is_chan
 def discord_message_query_str(guild_id, query_filters=None, offset=0, is_channel=False):
     if query_filters is None:
         query_filters = []
+
+    query_filters = Query.QueryCollection(query_filters)
 
     qoffset_filters = tuple(i for i, x in enumerate(query_filters) if isinstance(x, Query.Offset))
     if len(qoffset_filters) > 1:
@@ -73,7 +74,12 @@ class Query:
 
     class QueryCollection:
         def __init__(self, queries):
-            self.queries = list(queries)
+            if isinstance(queries, Query.Template) :
+                self.queries = [queries]
+            elif not isinstance(queries, type(self)) :
+                self.queries = list(queries)
+            else :
+                self.queries = queries.queries
 
         def __and__(self, other):
             if not isinstance(other, type(self)) :
@@ -88,8 +94,8 @@ class Query:
             del self.queries[index]
             return tmp
 
-        def __index__(self, index):
-            return self.queries[index]
+        def __getitem__(self, item):
+            return self.queries[item]
 
         def __iter__(self):
             return iter(self.queries)
