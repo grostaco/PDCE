@@ -52,113 +52,114 @@ def discord_message_query_str(guild_id, query_filters=None, offset=0, is_channel
 
 
 class Query:
-    class Author:
-        def __init__(self, author_id):
-            self.author_id = author_id
+    # Template query for inheritance, DO NOT use as a filter.
+    class Template:
+        inverted = False
+
+        def __invert__(self):
+            self.inverted = not self.inverted
+            return self
 
         def __str__(self):
             return self.query_str
+
+        def __and__(self, other):
+            return Query.QueryCollection((self, other))
 
         @property
         def query_str(self):
-            return 'author_id={}'.format(self.author_id)
+            return None
 
-    class Mention:
+    class QueryCollection:
+        def __init__(self, queries):
+            self.queries = list(queries)
+
+        def __and__(self, other):
+            if not isinstance(other, type(self)) :
+                self.queries.append(other)
+            else :
+                self.queries += other.queries
+
+            return Query.QueryCollection(self.queries)
+
+
+    class Author(Template):
+        def __init__(self, author_id):
+            self.author_id = author_id
+
+        @property
+        def query_str(self):
+            return 'author_id={}'.format(self.dummy)
+
+    class Mention(Template):
         def __init__(self, user_id):
             self.user_id = user_id
-
-        def __str__(self):
-            return self.query_str
 
         @property
         def query_str(self):
             return 'mentions={}'.format(self.user_id)
 
-    class Before:
+    class Before(Template):
         def __init__(self, timestamp):
             self.timestamp = timestamp
-
-        def __str__(self):
-            return self.query_str
 
         @property
         def query_str(self):
             return 'max_id={}'.format(self.timestamp)
 
-    class After:
+    class After(Template):
         def __init__(self, timestamp):
             self.timestamp = timestamp
-
-        def __str__(self):
-            return self.query_str
 
         @property
         def query_str(self):
             return 'min_id={}'.format(self.timestamp)
 
-    class Has:
+    class Has(Template):
         def __init__(self, *contains):
             self.contains = contains
-
-        def __str__(self):
-            return self.query_str
 
         @property
         def query_str(self):
             return '&'.join(['has={}'.format(x) for x in self.contains])
 
-    class Channel:
+    class Channel(Template):
         def __init__(self, channel_id):
             self.channel_id = channel_id
-
-        def __str__(self):
-            return self.query_str
 
         @property
         def query_str(self):
             return 'channel_id={}'.format(self.channel_id)
 
-    class IncludeNSFW:
+    class IncludeNSFW(Template):
         def __init__(self, include_nsfw):
             self.include_nsfw = include_nsfw
-
-        def __str__(self):
-            return self.query_str
 
         @property
         def query_str(self):
             return 'include_nsfw={}'.format(self.include_nsfw)
 
-    class Offset:
+    class Offset(Template):
         def __init__(self, offset):
             self.offset = offset
-
-        def __str__(self):
-            return self.query_str
 
         @property
         def query_str(self):
             return 'offset={}'.format(self.offset)
 
     # not useful in query functions
-    class Limit:
+    class Limit(Template):
         def __init__(self, limit):
             self.limit = limit
-
-        def __str__(self):
-            return self.query_str
 
         @property
         def query_str(self):
             return 'limit={}'.format(self.limit)
 
-    class During:
+    class During(Template):
         def __init__(self, before, after):
             self.before = before
             self.after = after
-
-        def __str__(self):
-            return self.query_str
 
         @property
         def query_str(self):
