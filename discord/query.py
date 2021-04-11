@@ -1,34 +1,32 @@
 import requests
 import time
 import tqdm
+from urllib.parse import urljoin
+from .util import tqdm_ratelimit_sleep
 
-DISCORD_ENDPOINT = "https://discord.com/api/v8"
+DISCORD_ENDPOINT = "https://discord.com/api/v8/"
+
+
+def discord_request(path, headers=None, data=None, sleep_callback=time.sleep):
+    while True:
+        r = requests.get(urljoin(DISCORD_ENDPOINT, path), headers=headers, data=data)
+        if r.status_code == 429:
+            sleep_callback(r.json()['retry_after'])
+            continue
+        elif r.status_code == 200:
+            return r
+        raise ValueError("Unexpected response status code {}".format(r.status_code))
+
 
 def discord_message_query(token, guild_id, query_filters=None, offset=0, is_channel=False):
-    while True:
-        res = requests.get(discord_message_query_str(guild_id, query_filters=query_filters, offset=0,
-                                                     is_channel=is_channel),
-                           headers={'Authorization': str(token),
-                                    'accept': '*/*',
-                                    'accept-encoding': 'gzip, deflate, br',
-                                    'accept-language': 'en-US',
-                                    'sec-fetch-dest': 'empty',
-                                    'sec-fetch-mode': 'cors',
-                                    'sec-fetch-site': 'same-origin',
-                                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, '
-                                                  'like Gecko) discord/0.0.309 Chrome/83.0.4103.122 Electron/9.3.5 '
-                                                  'Safari/537.36 ',
-                                    },
-                           )
-        if res.status_code == 429:
-            retry_after = res.json()['retry_after']
-            for x in tqdm.tqdm(range(int(retry_after * 10)), desc='Rate limited: Waiting:', position=0,
-                               leave=True):
-                time.sleep(0.1)
-        elif res.status_code == 200:
-            return res
-        else:
-            raise RuntimeError("Got unexpected status code {} with content {}".format(res.status_code, res.json()))
+    r = discord_request(
+        discord_message_query_str(guild_id, query_filters=query_filters, offset=0, is_channel=is_channel),
+        headers={'Authorization': str(token),
+                 'user-agent' : 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) '
+                                'discord/0.0.309 Chrome/83.0.4103.122 Electron/9.3.5 Safari/537.36'
+                 },
+        sleep_callback=tqdm_ratelimit_sleep)
+    return r
 
 
 def discord_message_query_str(guild_id, query_filters=None, offset=0, is_channel=False):
@@ -45,8 +43,8 @@ def discord_message_query_str(guild_id, query_filters=None, offset=0, is_channel
     else:
         query_filters[qoffset_filters[0]].offset += offset
 
-    qstr = ('{}/channels/{}/messages/search?{}' if is_channel else '{}/guilds/{}/messages/search?{}') \
-        .format(DISCORD_ENDPOINT, guild_id, "&".join(map(str, query_filters)))
+    qstr = ('channels/{}/messages/search?{}' if is_channel else 'guilds/{}/messages/search?{}') \
+        .format(guild_id, "&".join(map(str, query_filters)))
     if len(qoffset_filters) == 0:
         query_filters.pop(-1)
     return qstr
@@ -74,17 +72,17 @@ class Query:
 
     class QueryCollection:
         def __init__(self, queries):
-            if isinstance(queries, Query.Template) :
+            if isinstance(queries, Query.Template):
                 self.queries = [queries]
-            elif not isinstance(queries, type(self)) :
+            elif not isinstance(queries, type(self)):
                 self.queries = list(queries)
-            else :
+            else:
                 self.queries = queries.queries
 
         def __and__(self, other):
-            if not isinstance(other, type(self)) :
+            if not isinstance(other, type(self)):
                 self.queries.append(other)
-            else :
+            else:
                 self.queries += other.queries
 
             return Query.QueryCollection(self.queries)
@@ -100,6 +98,10 @@ class Query:
         def __iter__(self):
             return iter(self.queries)
 
+        def compile(self, token=None):
+            if token is None:
+                assert not any(x.inverted for x in self.queries), "Inverted queries cannot be completed without token"
+                return self
 
     class Author(Template):
         def __init__(self, author_id):
@@ -107,7 +109,7 @@ class Query:
 
         @property
         def query_str(self):
-            return 'author_id={}'.format(self.dummy)
+            return 'author_id={}'.format(self.author_id)
 
     class Mention(Template):
         def __init__(self, user_id):
