@@ -107,7 +107,7 @@ class DiscordCustomContext:
         while total_read < limit:
             progress_bar.update(25)
             res = discord_message_query(self.token, guild_id=guild_id,
-                                        query_filters=query_filters+[Query.Before(time_offset)],
+                                        query_filters=query_filters & Query.Before(time_offset),
                                         offset=total_read, is_channel=is_channel)
             self.last_res = res
             json_buf['messages'] += res.json()['messages']
